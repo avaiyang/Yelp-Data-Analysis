@@ -1,0 +1,13 @@
+A = LOAD '/shared/users/avi/desktop/test/dataset/business.json' USING com.twitter.elephantbird.pig.load.JsonLoader('-nestedLoad') AS (busi: map[]);
+
+business = FOREACH A GENERATE busi#'categories' as categories, busi#'city' as city, (float)busi#'stars' as stars;
+
+catFlatten = FOREACH business GENERATE city, stars, FLATTEN(categories);
+
+groupCatCity = GROUP catFlatten by (categories, city);
+
+starAvgGroup = FOREACH groupCatCity GENERATE FLATTEN(group) AS (categories, city), AVG(catFlatten.stars) AS rankings;
+
+finalResult = ORDER starAvgGroup BY categories, rankings DESC;
+
+STORE finalResult INTO '/shared/users/avi/desktop/test/Q2.tsv';

@@ -1,0 +1,15 @@
+A = LOAD '/shared/users/avi/desktop/test/dataset/business.json' USING com.twitter.elephantbird.pig.load.JsonLoader('-nestedLoad') AS (busi: map[]);
+
+business = FOREACH A GENERATE (float)busi#'stars' AS stars, FLATTEN(busi#'categories') as categories, (double)busi#'latitude' AS latitude, (double)busi#'longitude' AS longitude;
+
+filterLocation = FILTER business BY ACOS(SIN((55.9469753*3.14)/180)*SIN((latitude*3.14)/180) + COS((55.9469753*3.14)/180)*COS((latitude*3.14)/180)*COS(((-3.2096308 - longitude)*3.14)/180))*6371 <= 15;
+
+catFlatten = FOREACH filterLocation GENERATE stars, FLATTEN(categories);
+
+groupCat = GROUP catFlatten by categories;
+
+starAvgGroup = FOREACH groupCat GENERATE FLATTEN(group) AS categories, AVG(catFlatten.stars) AS rankings;
+
+finalResult = ORDER starAvgGroup BY categories, rankings DESC;
+
+STORE finalResult INTO '/shared/users/avi/desktop/test/Q3.tsv';

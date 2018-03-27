@@ -1,0 +1,21 @@
+
+A = LOAD '/shared/users/avi/desktop/test/dataset/business.json' USING com.twitter.elephantbird.pig.load.JsonLoader('-nestedLoad') AS (busi: map[]);
+
+business = FOREACH A GENERATE busi#'categories' as categories, busi#'business_id' as business_id, busi#'city' as city, busi#'state' as state;
+
+busifilter = FILTER business BY state IN ('AL', 'AK', 'AZ', 'AR', 'CA', 'CO', 'CT', 'DC', 'DE', 'FL', 'GA', 'HI', 'ID', 'IL', 'IN', 'IA', 'KS', 'KY', 'LA', 'ME', 'MD', 'MA', 'MI', 'MN', 'MS', 'MO', 'MT', 'NE', 'NV', 'NH', 'NJ', 'NM', 'NY', 'NC', 'ND', 'OH', 'OK', 'OR', 'PA', 'RI', 'SC', 'SD', 'TN', 'TX', 'UT', 'VT', 'VA', 'WA', 'WV', 'WI', 'WY');
+
+catBusinesses = FOREACH busifilter GENERATE categories, business_id, city ;
+
+B = LOAD '/shared/users/avi/desktop/test/dataset/review.json' USING com.twitter.elephantbird.pig.load.JsonLoader('-nestedLoad') AS (review: map[]);
+
+pullReview = FOREACH B GENERATE review#'business_id' as business_id, review#'review_id' as review_id;
+
+joinBoth = JOIN catBusinesses by business_id, pullReview by business_id;
+flattenJoin = FOREACH joinBoth GENERATE city, FLATTEN(categories);
+groupFlatten = GROUP flattenJoin by (city, categories);
+results = FOREACH groupFlatten GENERATE FLATTEN(group) AS (city,categories), COUNT(flattenJoin); 
+finalresults = ORDER results by city;
+
+STORE finalresults INTO '/shared/users/avi/desktop/test/q1.tsv';
+

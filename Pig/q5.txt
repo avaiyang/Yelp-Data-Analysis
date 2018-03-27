@@ -1,0 +1,44 @@
+
+A = LOAD '/shared/users/avi/desktop/test/dataset/business.json' USING com.twitter.elephantbird.pig.load.JsonLoader('-nestedLoad') AS (busi: map[]);
+
+business = FOREACH A GENERATE (float)busi#'stars' AS stars, busi#'categories' as categories,busi#'business_id' as business_id, (double)busi#'latitude' AS latitude, (double)busi#'longitude' AS longitude, busi#'name' AS name;
+
+filterLocation = FILTER business BY ACOS(SIN((55.9469753*3.14)/180)*SIN((latitude*3.14)/180) + COS((55.9469753*3.14)/180)*COS((latitude*3.14)/180)*COS(((-3.2096308 - longitude)*3.14)/180))*6371 <= 15 ;
+
+businrange = FOREACH filterLocation GENERATE name, stars, business_id, org.apache.pig.builtin.BagToString(TOBAG(categories)) as category; 
+filters = FILTER businrange BY category matches '.*Food.*';
+
+filterTop = ORDER filters by stars DESC;
+top_10 = limit filterTop 10;
+
+B = LOAD '/shared/users/avi/desktop/test/dataset/review.json' USING com.twitter.elephantbird.pig.load.JsonLoader('-nestedLoad=true ') AS (review: map[]); 
+
+rev = FOREACH B GENERATE (float)review#'rating' as ratings, review#'business_id' as business_id, (datetime)review#'date' AS date;
+
+filterMonth = FILTER rev BY (GetMonth(date)==1) OR (GetMonth(date)==2) OR (GetMonth(date)==3) OR (GetMonth(date)==4) OR (GetMonth(date)==5);
+
+joinBothTop = JOIN top_10 by business_id, filterMonth by business_id;
+
+groupEleTop = FOREACH joinBothTop GENERATE $0 as name, $1 as ratings, $5 as business_id; 
+
+resultTop = GROUP groupEleTop by (business_id, name);
+
+finalresultTop = FOREACH resultTop GENERATE FLATTEN (group) as (business_id, name), AVG(groupEleTop.ratings);
+
+STORE finalresultTop INTO '/shared/users/avi/desktop/test/Q5_top10.tsv';
+
+orderedbottom = ORDER filters by stars;
+
+bottom_10 = limit orderedbottom 10;
+
+joinBothBot = JOIN bottom_10 by business_id, filterMonth by business_id;
+
+generateEleBot = FOREACH joinBothBot GENERATE $0 as name, $1 as ratings, $5 as business_id; 
+
+groupEleBot = GROUP generateEleBot by (business_id, name);
+
+resultBot = FOREACH groupEleBot GENERATE FLATTEN (group) as (business_id, name), AVG(generateEleBot.ratings);
+
+finalResultBot = ORDER resultBot by ranking DESC;
+
+STORE finalResultBot INTO '/shared/users/avi/desktop/test/Q5_bottom10.tsv';

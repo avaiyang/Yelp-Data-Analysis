@@ -1,0 +1,21 @@
+%pig
+A = LOAD '/shared/users/avi/desktop/test/dataset/user.json' USING com.twitter.elephantbird.pig.load.JsonLoader('-nestedLoad=true ') AS (yelp: map[]);
+users = FOREACH A GENERATE yelp#'user_id' as user_id, yelp#'name' as name, (int)yelp#'review_count' as review_count;
+
+B = LOAD '/shared/users/avi/desktop/test/dataset/review.json' USING com.twitter.elephantbird.pig.load.JsonLoader('-nestedLoad=true ') AS (review: map[]); 
+revie = FOREACH B GENERATE review#'business_id' as business_id, (int)review#'stars' as stars, review#'user_id' as user_id;
+
+C = LOAD '/shared/users/avi/desktop/test/dataset/business.json' USING com.twitter.elephantbird.pig.load.JsonLoader('-nestedLoad') AS (busines: map[]); 
+business = FOREACH C GENERATE busines#'business_id' as business_id, busines#'categories' as categories, (double)busines#'latitude' AS latitude, (double)busines#'longitude' AS longitude;
+
+filterLocation = FILTER business BY ACOS(SIN((55.9469753*3.14)/180)*SIN((latitude*3.14)/180) + COS((55.9469753*3.14)/180)*COS((latitude*3.14)/180)*COS(((-3.2096308 - longitude)*3.14)/180))*6371 <= 15;
+
+joinbr = JOIN filterLocation by business_id, revie by business_id;
+joinbru = JOIN joinbr by revie::user_id, users by user_id;
+DESCRIBE joinbru;
+
+generator = FOREACH joinbru GENERATE users::name as Name, joinbr::revie::stars as Stars, FLATTEN(joinbr::filterLocation::categories) as categories, users::review_count as review_count; 
+gen = ORDER generator by review_count DESC;
+gen1 = LIMIT gen 10;
+
+STORE gen1 INTO '/shared/users/avi/desktop/test/Q4.tsv';
